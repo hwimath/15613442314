@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>자연수의 거듭제곱의 합</title>
+  <style>
+    /* 흑백 색 조합 */
+    body {
+      background-color: #000;
+      color: #fff;
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+    }
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+    .hidden {
+      display: none;
+    }
+    .energy-bar {
+      width: 100%;
+      height: 20px;
+      background-color: #555;
+      margin: 1rem 0;
+      position: relative;
+    }
+    .energy-bar-inner {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      background-color: #fff;
+      width: 100%;
+      transition: width 0.2s linear;
+    }
+    .difficulty-container,
+    .question-container,
+    .result-container {
+      margin-top: 1rem;
+    }
+    button {
+      background-color: #fff;
+      color: #000;
+      border: none;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      margin-right: 0.5rem;
+    }
+    button:hover {
+      opacity: 0.8;
+    }
+    .choices-container {
+      margin-top: 1rem;
+    }
+    .choice-btn {
+      display: block;
+      margin: 0.3rem 0;
+      background-color: #fff;
+      color: #000;
+      width: fit-content;
+      border: none;
+      padding: 0.3rem 0.6rem;
+      cursor: pointer;
+    }
+    .info {
+      margin: 0.5rem 0;
+    }
+    .score-board {
+      margin: 1rem 0;
+    }
+    .name-input-container {
+      margin-top: 1rem;
+    }
+    .shuffle-note {
+      font-size: 0.9rem;
+      color: #ccc;
+      margin-bottom: 1rem;
+    }
+    #response {
+      white-space: pre;
+      background: #333;
+      color: #fff;
+      margin-top: 1rem;
+      padding: 1rem;
+    }
+  </style>
+
+  <!-- MathJax 로드 (LaTeX 수식 렌더링) -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    defer
+  ></script>
+</head>
+<body>
+  <div class="container">
+    <h1>자연수의 거듭제곱의 합</h1>
+
+    <!-- 0. 첫 화면: 이름 입력 -->
+    <div id="nameScreen">
+      <p>게임에 참가할 이름을 입력해주세요.</p>
+      <input type="text" id="playerNameInput" placeholder="이름 입력" />
+      <button onclick="goToDifficultySelection()">확인</button>
+    </div>
+
+    <!-- 1. 난이도 선택 화면 -->
+    <div id="difficultyScreen" class="hidden">
+      <p>난이도를 선택해주세요.</p>
+      <button onclick="selectDifficulty('최상')">최상 (20초, +20점)</button>
+      <button onclick="selectDifficulty('상')">상 (30초, +15점)</button>
+      <button onclick="selectDifficulty('중')">중 (40초, +13점)</button>
+      <button onclick="selectDifficulty('하')">하 (시간무제한, +10점)</button>
+    </div>
+
+    <!-- 2. 퀴즈화면 -->
+    <div id="quizScreen" class="hidden">
+      <!-- 전체 게임 시간 표시 -->
+      <div class="info">
+        전체 진행 시간: <span id="totalTime">0</span>초
+      </div>
+      <!-- 남은 기회 표시 -->
+      <div class="info">
+        남은 기회: <span id="lives">3</span>
+      </div>
+      <!-- 점수 표시 -->
+      <div class="score-board">
+        현재 점수: <span id="score">0</span>
+      </div>
+      <!-- 에너지바 (난이도 하 제외) -->
+      <div id="energyBar" class="energy-bar hidden">
+        <div id="energyBarInner" class="energy-bar-inner"></div>
+      </div>
+
+      <div class="question-container">
+        <div id="questionText"></div>
+        <div class="choices-container" id="choicesContainer"></div>
+      </div>
+
+      <div class="shuffle-note">
+        문제는 무작위 순서로 출제되며, 모든 문제(1~80번)를 소진하면 다시 무작위 반복됩니다.
+      </div>
+    </div>
+
+    <!-- 3. 게임 종료 후 결과 및 전송 -->
+    <div id="endScreen" class="hidden">
+      <h2>게임 종료</h2>
+      <p>최종 점수: <span id="finalScore"></span></p>
+      <p>총 소요 시간: <span id="finalTime"></span>초</p>
+      <button onclick="sendScore()">점수전송</button>
+      <div id="response"></div>
+    </div>
+  </div>
+
+  <script>
+    /************************************************
+     *  문제 데이터
+     *  - 각 문제는 { question, choices, correct } 형태
+     *  - correct: 정답 보기의 인덱스(0~3)
+     *  - 모든 수식은 \\(...\\) 형태 사용
+     ***********************************************/
+    const allQuestions = [
+      // -- 1번 ~ 10번 --
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} k^3\\)",
+        choices: [
+          "\\(3025\\)",
+          "\\(385\\)",
+          "\\(171\\)",
+          "\\(64\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} k^2\\)",
+        choices: [
+          "\\(3025\\)",
+          "\\(385\\)",
+          "\\(171\\)",
+          "\\(64\\)",
+        ],
+        correct: 1
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=2}^{10} (3k + 1)\\)",
+        choices: [
+          "\\(3025\\)",
+          "\\(385\\)",
+          "\\(171\\)",
+          "\\(64\\)",
+        ],
+        correct: 2
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=3}^{10} (2k - 5)\\)",
+        choices: [
+          "\\(3025\\)",
+          "\\(385\\)",
+          "\\(171\\)",
+          "\\(64\\)",
+        ],
+        correct: 3
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (k - 2)^3\\)",
+        choices: [
+          "\\(1295\\)",
+          "\\(385\\)",
+          "\\(171\\)",
+          "\\(64\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (4k + 2)\\)",
+        choices: [
+          "\\(240\\)",
+          "\\(385\\)",
+          "\\(171\\)",
+          "\\(64\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (k + 1)(k - 3)\\)",
+        choices: [
+          "\\(245\\)",
+          "\\(385\\)",
+          "\\(171\\)",
+          "\\(64\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} k(k + 1)\\)",
+        choices: [
+          "\\(420\\)",
+          "\\(385\\)",
+          "\\(171\\)",
+          "\\(64\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=2}^{10} (3k - 5)\\)",
+        choices: [
+          "\\(117\\)",
+          "\\(385\\)",
+          "\\(171\\)",
+          "\\(64\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=3}^{10} k(k + 2)\\)",
+        choices: [
+          "\\(484\\)",
+          "\\(385\\)",
+          "\\(171\\)",
+          "\\(64\\)",
+        ],
+        correct: 0
+      },
+
+      // -- 21번 ~ 38번 --
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (k^2 + 2k + 4 - k^2 + 1)\\)",
+        choices: [
+          "\\(160\\)",
+          "\\(170\\)",
+          "\\(180\\)",
+          "\\(190\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (k+5)(k-2) - \\sum_{k=1}^{10} (k-5)(k+2)\\)",
+        choices: [
+          "\\(330\\)",
+          "\\(340\\)",
+          "\\(350\\)",
+          "\\(360\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} k(k+1)\\)",
+        choices: [
+          "\\(440\\)",
+          "\\(450\\)",
+          "\\(460\\)",
+          "\\(470\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{8} (k^2 + 3k + 2)\\)",
+        choices: [
+          "\\(328\\)",
+          "\\(338\\)",
+          "\\(348\\)",
+          "\\(358\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (k+1)^3 - \\sum_{k=1}^{10} (k-1)^3\\)",
+        choices: [
+          "\\(1330\\)",
+          "\\(1340\\)",
+          "\\(1350\\)",
+          "\\(1360\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (k^2 + 1) - \\sum_{k=1}^{10} (k - 1)\\)",
+        choices: [
+          "\\(680\\)",
+          "\\(690\\)",
+          "\\(700\\)",
+          "\\(710\\)",
+        ],
+        correct: 2
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{20} k^2\\)",
+        choices: [
+          "\\(2870\\)",
+          "\\(2880\\)",
+          "\\(2890\\)",
+          "\\(2900\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{8} 2k(k - 1) - \\sum_{i=1}^{8} (i^2 - 1)\\)",
+        choices: [
+          "\\(170\\)",
+          "\\(180\\)",
+          "\\(190\\)",
+          "\\(200\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (2k - 3)^2\\)",
+        choices: [
+          "\\(790\\)",
+          "\\(800\\)",
+          "\\(810\\)",
+          "\\(820\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (k^2 + 2k - 3)\\)",
+        choices: [
+          "\\(485\\)",
+          "\\(495\\)",
+          "\\(505\\)",
+          "\\(515\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (2k - 1)\\)",
+        choices: [
+          "\\(100\\)",
+          "\\(110\\)",
+          "\\(120\\)",
+          "\\(130\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} \\bigl( \\frac{1}{2}k + \\frac{1}{3}k \\bigr)\\)",
+        choices: [
+          "\\(25\\)",
+          "\\(30\\)",
+          "\\(35\\)",
+          "\\(40\\)",
+        ],
+        correct: 3
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (4^k - k^2)\\)",
+        choices: [
+          "\\(1398101\\)",
+          "\\(1398201\\)",
+          "\\(1398301\\)",
+          "\\(1398401\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} (k + 3^k)\\)",
+        choices: [
+          "\\(88573\\)",
+          "\\(88583\\)",
+          "\\(88593\\)",
+          "\\(88603\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=2}^{7} 3 \\cdot 2^k\\)",
+        choices: [
+          "\\(378\\)",
+          "\\(388\\)",
+          "\\(398\\)",
+          "\\(408\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} \\bigl( \\frac{2}{3} \\bigr)^k\\)",
+        choices: [
+          "\\(1.999\\)",
+          "\\(2.000\\)",
+          "\\(2.001\\)",
+          "\\(2.002\\)",
+        ],
+        correct: 1
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{10} 2^k\\)",
+        choices: [
+          "\\(2046\\)",
+          "\\(2047\\)",
+          "\\(2048\\)",
+          "\\(2049\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=3}^{12} (2^{k-2} - 1)\\)",
+        choices: [
+          "\\(2036\\)",
+          "\\(2037\\)",
+          "\\(2038\\)",
+          "\\(2039\\)",
+        ],
+        correct: 0
+      },
+
+      // -- 49번 ~ 65번 --
+      {
+        question: "다음 수열의 첫째항부터 제10항까지의 합을 구하시오. \\(1,\\; 1+3,\\; 1+3+5,\\; 1+3+5+7, \\dots\\)",
+        choices: [
+          "\\(385\\)",
+          "\\(400\\)",
+          "\\(415\\)",
+          "\\(430\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 수열의 첫째항부터 제10항까지의 합을 구하시오. \\(1,\\; 1+2,\\; 1+2+3,\\; 1+2+3+4, \\dots\\)",
+        choices: [
+          "\\(220\\)",
+          "\\(230\\)",
+          "\\(240\\)",
+          "\\(250\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 수열의 첫째항부터 제10항까지의 합을 구하시오. \\(1 \\cdot 14,\\; 2 \\cdot 13,\\; 3 \\cdot 12, \\dots\\)",
+        choices: [
+          "\\(440\\)",
+          "\\(450\\)",
+          "\\(460\\)",
+          "\\(470\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 수열의 첫째항부터 제10항까지의 합을 구하시오. \\(1 \\cdot 11,\\; 2 \\cdot 10,\\; 3 \\cdot 9, \\dots\\)",
+        choices: [
+          "\\(275\\)",
+          "\\(285\\)",
+          "\\(295\\)",
+          "\\(305\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 수열의 첫째항부터 제10항까지의 합을 구하시오. \\(2 \\cdot 4,\\; 4 \\cdot 5,\\; 6 \\cdot 6,\\; 8 \\cdot 7, \\dots\\)",
+        choices: [
+          "\\(1100\\)",
+          "\\(1110\\)",
+          "\\(1120\\)",
+          "\\(1130\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 수열의 첫째항부터 제10항까지의 합을 구하시오. \\(2 \\cdot 3,\\; 3 \\cdot 4,\\; 4 \\cdot 5,\\; 5 \\cdot 6, \\dots\\)",
+        choices: [
+          "\\(570\\)",
+          "\\(580\\)",
+          "\\(590\\)",
+          "\\(600\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 수열의 첫째항부터 제10항까지의 합을 구하시오. \\(1,\\; 1+2,\\; 1+2+2^2,\\; 1+2+2^2+2^3, \\dots\\)",
+        choices: [
+          "\\(2046\\)",
+          "\\(2047\\)",
+          "\\(2048\\)",
+          "\\(2049\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 수열의 첫째항부터 제10항까지의 합을 구하시오. \\(2,\\; 22,\\; 222,\\; 2222, \\dots\\)",
+        choices: [
+          "\\(246913580\\)",
+          "\\(246913581\\)",
+          "\\(246913582\\)",
+          "\\(246913583\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 수열의 첫째항부터 제10항까지의 합을 구하시오. \\(9,\\; 99,\\; 999,\\; 9999, \\dots\\)",
+        choices: [
+          "\\(1111111110\\)",
+          "\\(1111111111\\)",
+          "\\(1111111112\\)",
+          "\\(1111111113\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(1 + 2 + 3 + \\dots + 20\\)",
+        choices: [
+          "\\(210\\)",
+          "\\(220\\)",
+          "\\(230\\)",
+          "\\(240\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(1^2 + 2^2 + 3^2 + \\dots + 10^2\\)",
+        choices: [
+          "\\(385\\)",
+          "\\(395\\)",
+          "\\(405\\)",
+          "\\(415\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(5^2 + 6^2 + 7^2 + \\dots + 15^2\\)",
+        choices: [
+          "\\(1210\\)",
+          "\\(1220\\)",
+          "\\(1230\\)",
+          "\\(1240\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(3^3 + 4^3 + 5^3 + \\dots + 15^3\\)",
+        choices: [
+          "\\(12959\\)",
+          "\\(12969\\)",
+          "\\(12979\\)",
+          "\\(12989\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(1^3 + 2^3 + 3^3 + \\dots + 9^3\\)",
+        choices: [
+          "\\(2025\\)",
+          "\\(2035\\)",
+          "\\(2045\\)",
+          "\\(2055\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(1 \\cdot 3 + 3 \\cdot 4 + 5 \\cdot 5 + \\dots + 19 \\cdot 12\\)",
+        choices: [
+          "\\(816\\)",
+          "\\(826\\)",
+          "\\(836\\)",
+          "\\(846\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(1 \\cdot 2 + 3 \\cdot 4 + 5 \\cdot 6 + 7 \\cdot 8 + \\dots + 19 \\cdot 20\\)",
+        choices: [
+          "\\(1460\\)",
+          "\\(1470\\)",
+          "\\(1480\\)",
+          "\\(1490\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(1 \\cdot 3 + 2 \\cdot 5 + 3 \\cdot 7 + \\dots + 10 \\cdot 21\\)",
+        choices: [
+          "\\(825\\)",
+          "\\(835\\)",
+          "\\(845\\)",
+          "\\(855\\)",
+        ],
+        correct: 0
+      },
+
+      // -- 70번 ~ 80번 --
+      {
+        question: "다음 방정식을 만족시키는 자연수 \\(n\\)의 값을 구하시오. \\(1^2 + 2^2 + 3^2 + \\dots + n^2 = 140\\)",
+        choices: [
+          "\\(7\\)",
+          "\\(8\\)",
+          "\\(9\\)",
+          "\\(10\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 수열의 첫째항부터 제9항까지의 합을 구하시오. \\(2^1 - 1,\\; 2^2 - 3,\\; 2^3 - 5,\\; 2^4 - 7, \\dots\\)",
+        choices: [
+          "\\(941\\)",
+          "\\(951\\)",
+          "\\(961\\)",
+          "\\(971\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 수열의 첫째항부터 제15항까지의 합이 \\(\\dfrac{p}{q}\\)일 때, \\(p + q\\)의 값을 구하시오.<br> \\(1,\\; 1 + \\dfrac{1}{3},\\; 1 + \\dfrac{1}{3} + \\dfrac{1}{9},\\; 1 + \\dfrac{1}{3} + \\dfrac{1}{9} + \\dfrac{1}{27}, \\dots\\)",
+        choices: [
+          "\\(101\\)",
+          "\\(102\\)",
+          "\\(103\\)",
+          "\\(104\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "\\(S_n = \\sum_{k=1}^{n} a_k = n^2 - 2n + 2\\)일 때, \\(\\sum_{k=1}^{10} a_{2k-1}\\)의 값을 구하시오.",
+        choices: [
+          "\\(172\\)",
+          "\\(182\\)",
+          "\\(192\\)",
+          "\\(202\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{p=1}^{5} \\bigl(\\sum_{q=1}^{9} (p + q)\\bigr)\\)",
+        choices: [
+          "\\(360\\)",
+          "\\(370\\)",
+          "\\(380\\)",
+          "\\(390\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{i=1}^{10} \\bigl(\\sum_{j=1}^{10} (i + j^2 + 1)\\bigr)\\)",
+        choices: [
+          "\\(4500\\)",
+          "\\(4600\\)",
+          "\\(4700\\)",
+          "\\(4800\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{j=1}^{10} \\bigl(\\sum_{k=1}^{10} (2i + j)\\bigr)\\) (\\(i\\)는 질문 내 오타, 그대로 둠)",
+        choices: [
+          "\\(1650\\)",
+          "\\(1660\\)",
+          "\\(1670\\)",
+          "\\(1680\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{i=1}^{10} \\bigl(\\sum_{k=1}^{i} (2k + 4)\\bigr)\\)",
+        choices: [
+          "\\(660\\)",
+          "\\(670\\)",
+          "\\(680\\)",
+          "\\(690\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{i=1}^{10} \\bigl(\\sum_{j=1}^{6} (i^2 - 2ij + 2)\\bigr)\\)",
+        choices: [
+          "\\(120\\)",
+          "\\(130\\)",
+          "\\(140\\)",
+          "\\(150\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{i=1}^{10} \\bigl(\\sum_{k=1}^{i} (2k + 1)\\bigr)\\)",
+        choices: [
+          "\\(495\\)",
+          "\\(505\\)",
+          "\\(515\\)",
+          "\\(525\\)",
+        ],
+        correct: 0
+      },
+      {
+        question: "다음 합을 계산하시오. \\(\\sum_{k=1}^{7} (1 + 2 + 3 + \\dots + k)\\)",
+        choices: [
+          "\\(84\\)",
+          "\\(94\\)",
+          "\\(104\\)",
+          "\\(114\\)",
+        ],
+        correct: 0
+      }
+    ];
+
+    /*****************************************
+     * 문제/보기 배열을 무작위로 섞기 위한 함수
+     *****************************************/
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    // 처음에 문제 리스트를 랜덤 섞음
+    shuffleArray(allQuestions);
+
+    /************************************************************
+     * 전역 상태 변수
+     ************************************************************/
+    let currentIndex = 0;       // 현재 문제 인덱스
+    let score = 0;              // 현재 점수
+    let lives = 3;              // 남은 기회
+    let difficulty = null;      // 난이도(최상, 상, 중, 하)
+    let timeLimit = 0;          // 한 문제당 제한시간
+    let timerId = null;         // 문제 제한시간용 타이머
+    let totalTime = 0;          // 전체 게임 시간(초)
+    let totalTimerId = null;    // 전체 게임 시간용 타이머
+    let playerName = "";        // 플레이어 이름
+    let questionCount = 0;      // 출제된 문제 수 (80 넘으면 다시 0부터)
+
+    /************************************************************
+     * 이름 입력 후 난이도 선택화면으로 이동
+     ************************************************************/
+    function goToDifficultySelection() {
+      const nameInput = document.getElementById("playerNameInput");
+      if (!nameInput.value.trim()) {
+        alert("이름을 입력해주세요.");
+        return;
+      }
+      playerName = nameInput.value.trim();
+
+      document.getElementById("nameScreen").classList.add("hidden");
+      document.getElementById("difficultyScreen").classList.remove("hidden");
+    }
+
+    /************************************************************
+     * 난이도 선택 처리
+     ************************************************************/
+    function selectDifficulty(level) {
+      difficulty = level;
+      switch (level) {
+        case "최상":
+          timeLimit = 20;
+          break;
+        case "상":
+          timeLimit = 30;
+          break;
+        case "중":
+          timeLimit = 40;
+          break;
+        case "하":
+          timeLimit = 0; // 시간 무제한
+          break;
+      }
+
+      // 화면 전환
+      document.getElementById("difficultyScreen").classList.add("hidden");
+      document.getElementById("quizScreen").classList.remove("hidden");
+
+      // 전체시간 타이머 시작
+      totalTimerId = setInterval(() => {
+        totalTime++;
+        document.getElementById("totalTime").innerText = totalTime;
+      }, 1000);
+
+      // 첫 문제 표시
+      showQuestion();
+    }
+
+    /************************************************************
+     * 문제 출력 함수
+     * - 80문제 모두 소진 시, 다시 처음부터 랜덤(무한 반복)
+     ************************************************************/
+    function showQuestion() {
+      // 만약 80문제를 모두 냈다면 다시 섞어서 재시작
+      if (questionCount >= 80) {
+        shuffleArray(allQuestions);
+        currentIndex = 0;
+        questionCount = 0;
+      }
+
+      // 에너지바 표시 여부
+      const energyBar = document.getElementById("energyBar");
+      if (difficulty === "하") {
+        // 시간제한 없음
+        energyBar.classList.add("hidden");
+      } else {
+        energyBar.classList.remove("hidden");
+      }
+
+      const qData = allQuestions[currentIndex];
+      // 문제 텍스트
+      document.getElementById("questionText").innerHTML = qData.question;
+
+      // 보기 섞기(별도 인덱스 배열 활용)
+      const indices = [0, 1, 2, 3];
+      shuffleArray(indices);
+
+      // 보기 표시
+      const choicesContainer = document.getElementById("choicesContainer");
+      choicesContainer.innerHTML = "";
+      indices.forEach((idx) => {
+        const btn = document.createElement("button");
+        btn.className = "choice-btn";
+        btn.innerHTML = qData.choices[idx];
+        btn.onclick = () => checkAnswer(idx, indices, qData.correct);
+        choicesContainer.appendChild(btn);
+      });
+
+      // MathJax 렌더링
+      MathJax.typeset();
+
+      // 문제 제한시간 타이머 시작 (하 난이도는 시간제한 없음)
+      if (timerId) clearInterval(timerId);
+      if (difficulty !== "하") {
+        startQuestionTimer(timeLimit);
+      }
+
+      questionCount++;
+    }
+
+    /************************************************************
+     * 문제 제한시간 타이머
+     ************************************************************/
+    function startQuestionTimer(seconds) {
+      let timeLeft = seconds;
+      updateEnergyBar(timeLeft, seconds);
+      timerId = setInterval(() => {
+        timeLeft--;
+        updateEnergyBar(timeLeft, seconds);
+        if (timeLeft <= 0) {
+          clearInterval(timerId);
+          // 시간 초과 => 기회 1 감소, 다음 문제로
+          lives--;
+          document.getElementById("lives").innerText = lives;
+          if (lives <= 0) {
+            endGame();
+            return;
+          }
+          nextQuestion(false, true); // 틀린 취급 + 답 표시(시간 초과)
+        }
+      }, 1000);
+    }
+
+    /************************************************************
+     * 에너지바 갱신(비율만 조정, 숫자 표기는 안함)
+     ************************************************************/
+    function updateEnergyBar(timeLeft, maxTime) {
+      const energyBarInner = document.getElementById("energyBarInner");
+      const widthPercent = (timeLeft / maxTime) * 100;
+      energyBarInner.style.width = widthPercent + "%";
+    }
+
+    /************************************************************
+     * 정답 체크
+     * - idx: 사용자가 누른 보기(섞인 index)
+     * - shuffledIndices: 섞인 보기의 인덱스 배열
+     * - correctIndex: 실제 정답의 원본 인덱스
+     ************************************************************/
+    function checkAnswer(idx, shuffledIndices, correctIndex) {
+      // 시간 타이머 정지
+      if (timerId) clearInterval(timerId);
+
+      const actualAnswer = shuffledIndices.indexOf(correctIndex);
+      // actualAnswer: 섞인 choices 중 정답이 몇 번째 버튼인지
+
+      if (idx === actualAnswer) {
+        // 정답
+        addScore();
+        nextQuestion(true);
+      } else {
+        // 오답
+        lives--;
+        document.getElementById("lives").innerText = lives;
+        alert("틀렸습니다. 정답은 '" + 
+              document.getElementsByClassName("choice-btn")[actualAnswer].innerHTML + 
+              "' 입니다.");
+        if (lives <= 0) {
+          endGame();
+          return;
+        }
+        nextQuestion(false);
+      }
+    }
+
+    /************************************************************
+     * 정답 시 점수 추가
+     ************************************************************/
+    function addScore() {
+      let point = 0;
+      switch (difficulty) {
+        case "최상": point = 20; break;
+        case "상":   point = 15; break;
+        case "중":   point = 13; break;
+        case "하":   point = 10; break;
+      }
+      score += point;
+      document.getElementById("score").innerText = score;
+    }
+
+    /************************************************************
+     * 다음 문제로 이동
+     * - correct: 맞췄는지 여부 (UI상 필요 시에만)
+     * - timeout: 시간 초과 여부
+     ************************************************************/
+    function nextQuestion(correct, timeout=false) {
+      currentIndex++;
+      if (currentIndex >= allQuestions.length) {
+        currentIndex = 0;
+      }
+      showQuestion();
+    }
+
+    /************************************************************
+     * 게임 종료
+     ************************************************************/
+    function endGame() {
+      // 타이머 정리
+      if (timerId) clearInterval(timerId);
+      if (totalTimerId) clearInterval(totalTimerId);
+
+      // 결과 화면 전환
+      document.getElementById("quizScreen").classList.add("hidden");
+      document.getElementById("endScreen").classList.remove("hidden");
+      document.getElementById("finalScore").innerText = score;
+      document.getElementById("finalTime").innerText = totalTime;
+    }
+
+    /************************************************************
+     * 점수 전송
+     * - 주어진 saveData 함수 사용
+     ************************************************************/
+    function sendScore() {
+      saveData(
+        "자연수의 거듭제곱의 합", // game
+        playerName,              // name
+        score,                   // score
+        totalTime                // elapsedTime
+      );
+    }
+
+    /************************************************************
+     * 서버 전송 함수 (문제에서 주어진 코드 복사/활용)
+     ************************************************************/
+    async function saveData(game, name, score, elapsedTime) {
+      const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+
+      const requestData = {
+        game,
+        name,
+        score: parseInt(score, 10),
+        elapsedTime: parseInt(elapsedTime, 10),
+      };
+
+      try {
+        const response = await fetch(FUNCTION_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestData),
+        });
+
+        const responseData = await response.json();
+
+        if (response.ok) {
+          document.getElementById("response").innerText =
+            "성공: " + JSON.stringify(responseData, null, 2);
+        } else {
+          document.getElementById("response").innerText =
+            "오류: " + JSON.stringify(responseData, null, 2);
+        }
+      } catch (error) {
+        console.error("요청 실패:", error);
+        document.getElementById("response").innerText =
+          "네트워크 오류: " + error.message;
+      }
+    }
+  </script>
+</body>
+</html>
